@@ -1,0 +1,12 @@
+[general]
+name=XLSForm Generator
+qgisMinimumVersion=3.0
+description=A plugin to generate XLSForms for ODK-based data collection.
+about=This plugin provides a user interface to create a survey and export it as an XLSForm, compatible with platforms like ODK and KoboToolbox.
+version=0.1
+author=Jules
+email=jules@example.com
+
+[ui-strings]
+menu_name=XLSForm Generator
+plugin_toolbar_name=XLSForm Generator
