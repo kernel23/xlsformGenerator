@@ -1,0 +1,12 @@
+[general]
+name=XLSForm Layer Generator
+qgisMinimumVersion=3.10
+description=A plugin to generate a QGIS layer from a web-based XLSForm builder.
+about=This plugin embeds a web-based form builder and generates a QGIS GeoPackage layer with a pre-configured attribute form based on the created survey.
+version=1.0
+author=Jules
+email=jules@example.com
+
+[ui-strings]
+menu_name=XLSForm Layer Generator
+plugin_toolbar_name=XLSForm Layer Generator
