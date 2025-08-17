@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XLSForm Generator (Advanced)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS library for creating XLSX files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .question-card {
+            transition: all 0.3s ease-in-out;
+        }
+        .question-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .btn {
+            transition: background-color 0.2s ease-in-out;
+        }
+        /* Modal styles */
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+        .modal-active {
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        .modal-content {
+            transition: transform 0.25s ease;
+        }
+        /* Preview specific styles */
+        .preview-likert-scale {
+            display: flex;
+            justify-content: space-around;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+        }
+        .preview-likert-scale label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #4b5563;
+        }
+        /* Floating Action Button (FAB) styles */
+        #fab-menu {
+            transition: all 0.2s ease-out;
+        }
+        #fab-btn {
+            transition: transform 0.2s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">XLSForm Generator</h1>
+            <p class="text-lg text-gray-600 mt-2">Create your survey form and export it to an ODK-compliant XLSForm file.</p>
+        </header>
+
+        <!-- Form Settings -->
+        <div class="bg-white p-6 rounded-xl shadow-md mb-8">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Survey Settings</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div>
+                        <label for="form_title" class="block text-sm font-medium text-gray-700">Form Title</label>
+                        <input type="text" id="form_title" value="My Awesome Survey" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="form_id" class="block text-sm font-medium text-gray-700">Form ID</label>
+                        <input type="text" id="form_id" value="my_awesome_survey" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg border">
+                    <label for="xlsform-upload" class="block text-sm font-medium text-gray-700 mb-2">Upload Existing XLSForm</label>
+                    <input type="file" id="xlsform-upload" accept=".xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    <p class="text-xs text-gray-500 mt-2">Load a form to edit it here. This will replace the current form.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Builder Area -->
+        <div id="form-builder" class="space-y-6"></div>
+        
+        <div id="no-questions-message" class="text-center py-12 bg-white rounded-xl shadow-md">
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No questions yet</h3>
+            <p class="mt-1 text-sm text-gray-500">Get started by adding a new question.</p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-8 flex justify-center items-center gap-4">
+            <button id="preview-btn" class="btn bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-blue-700 text-lg">
+                Preview Survey
+            </button>
+            <button id="download-xls" class="btn bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-green-700 text-lg">
+                Generate & Download XLSForm
+            </button>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 opacity-0 pointer-events-none">
+        <div class="modal-content bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] transform -translate-y-10">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h3 class="text-xl font-semibold">Survey Preview</h3>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+            </div>
+            <div id="preview-content" class="p-6 overflow-y-auto">
+                <!-- Preview content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button (FAB) -->
+    <div id="fab-container" class="fixed bottom-8 right-8 z-20">
+        <!-- Drop-up Menu -->
+        <div id="fab-menu" class="absolute bottom-20 right-0 w-48 bg-white rounded-lg shadow-xl p-2 space-y-1 transform scale-95 opacity-0 pointer-events-none">
+            <h3 class="text-sm font-semibold text-gray-500 px-2 mb-1">Question Type</h3>
+            <!-- This will be populated by JS -->
+        </div>
+        
+        <!-- FAB Button -->
+        <button id="fab-btn" class="w-16 h-16 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <svg class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+        </button>
+    </div>
+
+
+    <script>
+        // --- STATE MANAGEMENT ---
+        let surveyQuestions = [];
+        let choices = [];
+        let questionCounter = 0;
+
+        const appearanceMap = {
+            'text': ['multiline', 'numbers'],
+            'integer': ['thousands-sep'],
+            'decimal': ['thousands-sep'],
+            'date': ['no-calendar', 'month-year', 'year'],
+            'select_one': ['minimal', 'likert', 'list-nolabel', 'horizontal', 'quick'],
+            'select_multiple': ['minimal', 'list-nolabel', 'label', 'horizontal', 'quick'],
+            'geopoint': ['maps', 'placement-map'],
+            'image': ['signature', 'annotate', 'draw'],
+            'begin group': ['field-list'],
+            'begin repeat': ['field-list'],
+        };
+
+        const questionTypes = [
+            { type: 'text', label: 'Text', color: 'indigo' },
+            { type: 'integer', label: 'Integer', color: 'indigo' },
+            { type: 'decimal', label: 'Decimal', color: 'indigo' },
+            { type: 'date', label: 'Date', color: 'indigo' },
+            { type: 'select_one', label: 'Select One', color: 'teal' },
+            { type: 'select_multiple', label: 'Select Multiple', color: 'teal' },
+            { type: 'geopoint', label: 'Geopoint', color: 'blue' },
+            { type: 'image', label: 'Image', color: 'orange' },
+            { type: 'audio', label: 'Audio', color: 'orange' },
+            { type: 'video', label: 'Video', color: 'orange' },
+            { type: 'note', label: 'Note', color: 'gray' },
+            { type: 'calculate', label: 'Calculate', color: 'yellow' },
+            { type: 'acknowledge', label: 'Acknowledge', color: 'gray' },
+            { type: 'begin group', label: 'Begin Group', color: 'purple' },
+            { type: 'end group', label: 'End Group', color: 'purple' },
+            { type: 'begin repeat', label: 'Begin Repeat', color: 'red' },
+            { type: 'end repeat', label: 'End Repeat', color: 'red' },
+        ];
+
+        // --- DOM ELEMENTS ---
+        const formBuilder = document.getElementById('form-builder');
+        const downloadBtn = document.getElementById('download-xls');
+        const noQuestionsMessage = document.getElementById('no-questions-message');
+        const previewBtn = document.getElementById('preview-btn');
+        const previewModal = document.getElementById('preview-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const previewContent = document.getElementById('preview-content');
+        const uploadInput = document.getElementById('xlsform-upload');
+        const fabBtn = document.getElementById('fab-btn');
+        const fabMenu = document.getElementById('fab-menu');
+
+        // --- CORE FUNCTIONS ---
+        function addQuestion(type) {
+            questionCounter++;
+            const questionName = type.includes('group') || type.includes('repeat') ? type.replace(' ', '_') + `_${questionCounter}` : `q${questionCounter}`;
+            
+            const newQuestion = {
+                id: Date.now(),
+                type: type,
+                name: questionName,
+                label: '', hint: '', required: false, appearance: '',
+                relevant: '', constraint: '', constraint_message: '',
+                calculation: '',
+                list_name: type.startsWith('select_') ? `${questionName}_list` : ''
+            };
+
+            surveyQuestions.push(newQuestion);
+            
+            if (type.startsWith('select_')) {
+                choices.push({ id: Date.now() + 1, list_name: newQuestion.list_name, name: 'choice1', label: 'Choice 1' });
+                choices.push({ id: Date.now() + 2, list_name: newQuestion.list_name, name: 'choice2', label: 'Choice 2' });
+            }
+            
+            closeFabMenu();
+            render();
+        }
+
+        function updateQuestion(id, property, value) {
+            const question = surveyQuestions.find(q => q.id === id);
+            if (question) {
+                const oldListName = question.list_name;
+                question[property] = value;
+                // If list_name is changed, update associated choices
+                if (property === 'list_name' && oldListName) {
+                    choices.forEach(c => {
+                        if (c.list_name === oldListName) {
+                            c.list_name = value;
+                        }
+                    });
+                    render();
+                }
+            }
+        }
+        
+        function deleteQuestion(id) {
+            const questionToDelete = surveyQuestions.find(q => q.id === id);
+            if (!questionToDelete) return;
+            if (questionToDelete.list_name) {
+                choices = choices.filter(c => c.list_name !== questionToDelete.list_name);
+            }
+            surveyQuestions = surveyQuestions.filter(q => q.id !== id);
+            render();
+        }
+        
+        function addChoice(listName) {
+            const choiceCount = choices.filter(c => c.list_name === listName).length;
+            choices.push({ id: Date.now(), list_name: listName, name: `choice${choiceCount + 1}`, label: '' });
+            render();
+        }
+
+        function updateChoice(id, property, value) {
+            const choice = choices.find(c => c.id === id);
+            if (choice) { choice[property] = value; }
+        }
+
+        function deleteChoice(id) {
+            choices = choices.filter(c => c.id !== id);
+            render();
+        }
+
+        // --- UI RENDERING ---
+        function render() {
+            formBuilder.innerHTML = '';
+            noQuestionsMessage.style.display = surveyQuestions.length === 0 ? 'block' : 'none';
+            formBuilder.style.display = surveyQuestions.length > 0 ? 'block' : 'none';
+
+            surveyQuestions.forEach(q => {
+                const questionCard = document.createElement('div');
+                questionCard.className = 'question-card bg-white p-6 rounded-xl shadow-md border border-gray-200';
+                questionCard.innerHTML = createQuestionHTML(q);
+                formBuilder.appendChild(questionCard);
+            });
+            
+            attachEventListeners();
+        }
+        
+        function attachEventListeners() {
+            document.querySelectorAll('.question-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    const property = e.target.dataset.property;
+                    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+                    updateQuestion(id, property, value);
+                });
+            });
+            
+            document.querySelectorAll('.choice-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    const property = e.target.dataset.property;
+                    updateChoice(id, property, e.target.value);
+                });
+            });
+
+            document.querySelectorAll('.toggle-advanced').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const targetId = e.target.dataset.target;
+                    document.getElementById(targetId).classList.toggle('hidden');
+                });
+            });
+
+            document.querySelectorAll('.appearance-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    const customInput = document.getElementById(`appearance-custom-${id}`);
+                    if (e.target.value === 'other') {
+                        customInput.classList.remove('hidden');
+                        customInput.value = '';
+                        customInput.focus();
+                        updateQuestion(id, 'appearance', '');
+                    } else {
+                        customInput.classList.add('hidden');
+                        updateQuestion(id, 'appearance', e.target.value);
+                    }
+                });
+            });
+        }
+
+        function createQuestionHTML(q) {
+            const isSelect = q.type.startsWith('select_');
+            const questionChoices = isSelect ? choices.filter(c => c.list_name === q.list_name) : [];
+            const advancedSectionId = `advanced-${q.id}`;
+            
+            const relevantAppearances = appearanceMap[q.type] || [];
+            const isCustomAppearance = q.appearance && !relevantAppearances.includes(q.appearance);
+            
+            const appearanceOptions = relevantAppearances.map(app => `<option value="${app}" ${q.appearance === app ? 'selected' : ''}>${app}</option>`).join('');
+            const appearanceSelect = `
+                <select data-id="${q.id}" class="appearance-select mt-1 w-full input">
+                    <option value="" ${!q.appearance ? 'selected' : ''}>Default</option>
+                    ${appearanceOptions}
+                    <option value="other" ${isCustomAppearance ? 'selected' : ''}>Other...</option>
+                </select>
+                <input type="text" id="appearance-custom-${q.id}" data-id="${q.id}" data-property="appearance" value="${isCustomAppearance ? q.appearance : ''}" class="question-input mt-1 w-full input ${!isCustomAppearance ? 'hidden' : ''}" placeholder="Enter custom appearance">
+            `;
+
+            return `
+                <div class="flex justify-between items-start mb-4">
+                    <span class="bg-indigo-100 text-indigo-800 text-sm font-medium me-2 px-2.5 py-0.5 rounded">${q.type}</span>
+                    <button onclick="deleteQuestion(${q.id})" class="text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Name (variable)</label>
+                        <input type="text" data-id="${q.id}" data-property="name" value="${q.name || ''}" class="question-input mt-1 w-full input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Label (question text)</label>
+                        <input type="text" data-id="${q.id}" data-property="label" value="${q.label || ''}" class="question-input mt-1 w-full input">
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center justify-between">
+                    <label class="flex items-center">
+                        <input type="checkbox" data-id="${q.id}" data-property="required" ${q.required ? 'checked' : ''} class="question-input h-4 w-4 rounded">
+                        <span class="ml-2 text-sm text-gray-600">Required</span>
+                    </label>
+                    <button class="toggle-advanced text-sm text-blue-600 hover:underline" data-target="${advancedSectionId}">Advanced</button>
+                </div>
+                <div id="${advancedSectionId}" class="hidden mt-4 pt-4 border-t space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label class="block text-sm font-medium">Hint</label><input type="text" data-id="${q.id}" data-property="hint" value="${q.hint || ''}" class="question-input mt-1 w-full input"></div>
+                        <div><label class="block text-sm font-medium">Appearance</label>${appearanceSelect}</div>
+                        <div><label class="block text-sm font-medium">Relevant</label><input type="text" data-id="${q.id}" data-property="relevant" value="${q.relevant || ''}" class="question-input mt-1 w-full input"></div>
+                        <div><label class="block text-sm font-medium">Calculation</label><input type="text" data-id="${q.id}" data-property="calculation" value="${q.calculation || ''}" class="question-input mt-1 w-full input"></div>
+                        <div><label class="block text-sm font-medium">Constraint</label><input type="text" data-id="${q.id}" data-property="constraint" value="${q.constraint || ''}" class="question-input mt-1 w-full input"></div>
+                        <div><label class="block text-sm font-medium">Constraint Message</label><input type="text" data-id="${q.id}" data-property="constraint_message" value="${q.constraint_message || ''}" class="question-input mt-1 w-full input"></div>
+                    </div>
+                </div>
+                ${isSelect ? `
+                    <div class="mt-6 border-t pt-4">
+                        <div class="mb-2">
+                            <label class="block text-sm font-medium">Choice List Name</label>
+                            <input type="text" data-id="${q.id}" data-property="list_name" value="${q.list_name || ''}" class="question-input mt-1 w-full md:w-1/2 input">
+                        </div>
+                        <h4 class="text-md font-semibold text-gray-800 mb-2">Choices</h4>
+                        <div class="space-y-2">
+                            ${questionChoices.map(c => `
+                                <div class="flex items-center gap-2">
+                                    <input type="text" placeholder="Name" data-id="${c.id}" data-property="name" value="${c.name || ''}" class="choice-input w-full input text-sm">
+                                    <input type="text" placeholder="Label" data-id="${c.id}" data-property="label" value="${c.label || ''}" class="choice-input w-full input text-sm">
+                                    <button onclick="deleteChoice(${c.id})" class="text-gray-400 hover:text-red-500 text-xl font-bold">&times;</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button onclick="addChoice('${q.list_name}')" class="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800">Add Choice</button>
+                    </div>
+                ` : ''}
+            `;
+        }
+        
+        // --- PREVIEW MODAL ---
+        function renderPreview() {
+            previewContent.innerHTML = '';
+            let groupStack = [];
+
+            surveyQuestions.forEach(q => {
+                let element = '';
+                const requiredStar = q.required ? '<span class="text-red-500">*</span>' : '';
+                const indentLevel = groupStack.length;
+                const indentClass = `ml-${indentLevel * 4}`;
+                const currentGroup = groupStack.length > 0 ? groupStack[groupStack.length - 1] : null;
+
+                if (q.type === 'begin group' || q.type === 'begin repeat') {
+                    const isFieldList = q.appearance && q.appearance.includes('field-list');
+                    const fieldsetClass = isFieldList ? '' : 'border-l-2 border-gray-300 pl-4 my-4';
+                    element = `<fieldset class="${fieldsetClass} ${indentClass}"><legend class="font-semibold text-gray-700">${q.label}</legend>`;
+                    groupStack.push(q);
+                } else if (q.type === 'end group' || q.type === 'end repeat') {
+                    groupStack.pop();
+                    element = `</fieldset>`;
+                } else if (q.type === 'note' || q.type === 'acknowledge') {
+                    element = `<div class="my-4 p-3 bg-gray-100 rounded-md ${indentClass}"><p class="text-gray-800">${q.label}</p>${q.hint ? `<p class="text-sm text-gray-500">${q.hint}</p>`: ''}</div>`;
+                } else if (q.type.startsWith('select_')) {
+                    const questionChoices = choices.filter(c => c.list_name === q.list_name);
+                    let choiceElement = '';
+                    if (q.appearance === 'minimal') {
+                        choiceElement = `<select class="w-full p-2 border border-gray-300 rounded-md mt-1"><option value="">Select one...</option>${questionChoices.map(c => `<option value="${c.name}">${c.label}</option>`).join('')}</select>`;
+                    } else if (q.appearance === 'likert') {
+                        choiceElement = `<div class="preview-likert-scale mt-2">${questionChoices.map(c => `<label><input type="radio" name="${q.name}" class="mb-1">${c.label}</label>`).join('')}</div>`;
+                    } else {
+                        const layoutClass = q.appearance === 'horizontal' ? 'flex flex-wrap gap-x-4 gap-y-2' : '';
+                        const inputType = q.type === 'select_one' ? 'radio' : 'checkbox';
+                        choiceElement = `<div class="${layoutClass}">${questionChoices.map(c => `<label class="flex items-center my-1"><input type="${inputType}" name="${q.name}" class="mr-2">${c.label}</label>`).join('')}</div>`;
+                    }
+                    element = `<div class="my-4 ${indentClass}"><label class="block font-medium">${q.label} ${requiredStar}</label>${q.hint ? `<p class="text-sm text-gray-500 mb-2">${q.hint}</p>`: ''}${choiceElement}</div>`;
+                } else {
+                    let inputElement = '';
+                    if (q.type === 'text' && q.appearance === 'multiline') {
+                        inputElement = `<textarea class="w-full p-2 border border-gray-300 rounded-md mt-1"></textarea>`;
+                    } else if (q.type === 'date' && q.appearance === 'month-year') {
+                        inputElement = `<input type="month" class="w-full p-2 border border-gray-300 rounded-md mt-1">`;
+                    } else if (q.type === 'date' && q.appearance === 'year') {
+                        inputElement = `<input type="number" placeholder="YYYY" min="1900" max="2100" class="w-full p-2 border border-gray-300 rounded-md mt-1">`;
+                    } else {
+                        let inputType = 'text';
+                        if (q.type === 'integer' || q.type === 'decimal') inputType = 'number';
+                        if (q.type === 'date') inputType = 'date';
+                        if (q.type.startsWith('geo') || q.type === 'image' || q.type === 'audio' || q.type === 'video') inputType = 'file';
+                        inputElement = `<input type="${inputType}" class="w-full p-2 border border-gray-300 rounded-md mt-1">`;
+                    }
+                    element = `<div class="my-4 ${indentClass}"><label class="block font-medium">${q.label} ${requiredStar}</label>${q.hint ? `<p class="text-sm text-gray-500">${q.hint}</p>`: ''}${inputElement}</div>`;
+                }
+                previewContent.innerHTML += element;
+            });
+        }
+        
+        previewBtn.addEventListener('click', () => {
+            renderPreview();
+            previewModal.classList.remove('opacity-0', 'pointer-events-none');
+            previewModal.querySelector('.modal-content').classList.remove('-translate-y-10');
+            document.body.classList.add('modal-active');
+        });
+
+        const closeModal = () => {
+            previewModal.classList.add('opacity-0', 'pointer-events-none');
+            previewModal.querySelector('.modal-content').classList.add('-translate-y-10');
+            document.body.classList.remove('modal-active');
+        };
+
+        closeModalBtn.addEventListener('click', closeModal);
+        previewModal.addEventListener('click', (e) => { if (e.target === previewModal) closeModal(); });
+
+        // --- XLSX GENERATION ---
+        function generateXLSX() {
+            const surveySheetData = surveyQuestions.map(q => {
+                let type = q.type;
+                if (q.type.startsWith('select_')) {
+                    type = `${q.type} ${q.list_name}`;
+                }
+                return {
+                    type: type, name: q.name, label: q.label, hint: q.hint,
+                    required: q.required ? 'yes' : '', appearance: q.appearance,
+                    relevant: q.relevant, constraint: q.constraint,
+                    'constraint: message': q.constraint_message,
+                    calculation: q.calculation
+                };
+            });
+            const choicesSheetData = choices.map(c => ({ list_name: c.list_name, name: c.name, label: c.label }));
+            const settingsSheetData = [{ form_title: document.getElementById('form_title').value, form_id: document.getElementById('form_id').value, version: new Date().toISOString().slice(0, 10).replace(/-/g, "") }];
+            const wb = XLSX.utils.book_new();
+            const surveyHeaders = ['type', 'name', 'label', 'hint', 'required', 'relevant', 'constraint', 'constraint: message', 'calculation', 'appearance'];
+            const wsSurvey = XLSX.utils.json_to_sheet(surveySheetData, { header: surveyHeaders });
+            const wsChoices = XLSX.utils.json_to_sheet(choicesSheetData, { header: ['list_name', 'name', 'label'] });
+            const wsSettings = XLSX.utils.json_to_sheet(settingsSheetData, { header: ['form_title', 'form_id', 'version'] });
+            XLSX.utils.book_append_sheet(wb, wsSurvey, 'survey');
+            if (choices.length > 0) { XLSX.utils.book_append_sheet(wb, wsChoices, 'choices'); }
+            XLSX.utils.book_append_sheet(wb, wsSettings, 'settings');
+            const formId = document.getElementById('form_id').value || 'survey';
+            XLSX.writeFile(wb, `${formId}.xlsx`);
+        }
+
+        // --- XLSFORM UPLOAD AND PARSING ---
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) { return; }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    if (workbook.Sheets['settings']) {
+                        const settingsData = XLSX.utils.sheet_to_json(workbook.Sheets['settings']);
+                        if (settingsData.length > 0) {
+                            document.getElementById('form_title').value = settingsData[0].form_title || '';
+                            document.getElementById('form_id').value = settingsData[0].form_id || '';
+                        }
+                    }
+
+                    choices = [];
+                    if (workbook.Sheets['choices']) {
+                        const choicesData = XLSX.utils.sheet_to_json(workbook.Sheets['choices']);
+                        choices = choicesData.map((c, index) => ({ id: Date.now() + index, list_name: c.list_name, name: c.name, label: c.label }));
+                    }
+                    
+                    surveyQuestions = [];
+                    if (workbook.Sheets['survey']) {
+                        const surveyData = XLSX.utils.sheet_to_json(workbook.Sheets['survey']);
+                        surveyQuestions = surveyData.map((q, index) => {
+                            const typeParts = (q.type || '').split(' ');
+                            const questionType = typeParts[0];
+                            const listName = typeParts.length > 1 ? typeParts.slice(1).join(' ') : '';
+
+                            return {
+                                id: Date.now() + index, type: questionType, name: q.name, label: q.label,
+                                hint: q.hint, required: q.required === 'yes' || q.required === true,
+                                appearance: q.appearance, relevant: q.relevant, constraint: q.constraint,
+                                constraint_message: q['constraint: message'], calculation: q.calculation,
+                                list_name: listName
+                            };
+                        });
+                    } else {
+                        throw new Error('The uploaded file must contain a "survey" sheet.');
+                    }
+                    render();
+                } catch (error) {
+                    console.error("Error parsing XLSForm file:", error);
+                    alert("Could not read the XLSForm. Make sure it has 'survey', 'choices', and 'settings' sheets in the correct format.");
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- FAB MENU LOGIC ---
+        function populateFabMenu() {
+            fabMenu.innerHTML = '<h3 class="text-sm font-semibold text-gray-500 px-2 mb-1">Question Type</h3>';
+            questionTypes.forEach(q => {
+                const button = document.createElement('button');
+                button.className = `w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-gray-100`;
+                button.textContent = q.label;
+                button.onclick = () => addQuestion(q.type);
+                fabMenu.appendChild(button);
+            });
+        }
+
+        function openFabMenu() {
+            fabMenu.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
+            fabBtn.classList.add('rotate-45');
+        }
+
+        function closeFabMenu() {
+            fabMenu.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+            fabBtn.classList.remove('rotate-45');
+        }
+
+        fabBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (fabMenu.classList.contains('pointer-events-none')) {
+                openFabMenu();
+            } else {
+                closeFabMenu();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!fabMenu.contains(e.target) && !fabBtn.contains(e.target)) {
+                closeFabMenu();
+            }
+        });
+
+
+        // --- INITIALIZATION ---
+        downloadBtn.addEventListener('click', generateXLSX);
+        uploadInput.addEventListener('change', handleFileUpload);
+        populateFabMenu();
+        render();
+
+    </script>
+</body>
+</html>
